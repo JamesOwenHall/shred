@@ -11,6 +11,13 @@ func NewDataset(input Iterator) *Dataset {
 	}
 }
 
+func (d *Dataset) Clone() Iterator {
+	return &Dataset{
+		Input:     d.Input.Clone(),
+		Transform: d.Transform,
+	}
+}
+
 func (d *Dataset) Next() (Record, error) {
 	if d.Transform == nil {
 		return d.Input.Next()
@@ -36,7 +43,7 @@ func (d *Dataset) Collect() ([]Record, error) {
 
 func (d *Dataset) Filter(fn func(Record) bool) *Dataset {
 	return &Dataset{
-		Input: d,
+		Input: d.Clone(),
 		Transform: func(iterator Iterator) (Record, error) {
 			for {
 				next, err := iterator.Next()
@@ -54,7 +61,7 @@ func (d *Dataset) Filter(fn func(Record) bool) *Dataset {
 
 func (d *Dataset) Map(fn func(Record) Record) *Dataset {
 	return &Dataset{
-		Input: d,
+		Input: d.Clone(),
 		Transform: func(iterator Iterator) (Record, error) {
 			next, err := iterator.Next()
 			if err != nil {
@@ -71,7 +78,7 @@ func (d *Dataset) Map(fn func(Record) Record) *Dataset {
 func (d *Dataset) Reduce(fn func(a, b Record) Record) *Dataset {
 	var acc Record
 	return &Dataset{
-		Input: d,
+		Input: d.Clone(),
 		Transform: func(iterator Iterator) (Record, error) {
 			for {
 				next, err := iterator.Next()

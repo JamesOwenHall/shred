@@ -8,6 +8,14 @@ var ErrFailingIterator = errors.New("failing iterator")
 
 type RecordIterator []Record
 
+func (r *RecordIterator) Clone() Iterator {
+	clone := make(RecordIterator, 0, len(*r))
+	for _, rec := range *r {
+		clone = append(clone, rec.Clone())
+	}
+	return &clone
+}
+
 func (r *RecordIterator) Next() (Record, error) {
 	if len(*r) == 0 {
 		return nil, nil
@@ -19,6 +27,10 @@ func (r *RecordIterator) Next() (Record, error) {
 }
 
 type FailingIterator struct{}
+
+func (f *FailingIterator) Clone() Iterator {
+	return new(FailingIterator)
+}
 
 func (f *FailingIterator) Next() (Record, error) {
 	return nil, ErrFailingIterator

@@ -27,6 +27,33 @@ func TestDatasetCollect(t *testing.T) {
 	}
 }
 
+func TestDatasetClone(t *testing.T) {
+	a := NewDataset(&RecordIterator{
+		{"foo": 1},
+		{"foo": 2},
+		{"foo": 3},
+	}).Reduce(func(a, b Record) Record {
+		return a.Set("foo", a.Int("foo")+b.Int("foo"))
+	})
+	b := a.Clone().(*Dataset)
+
+	aActual, err := a.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(aActual, []Record{{"foo": 6}}) {
+		t.Fatalf("unexpected: %v", aActual)
+	}
+
+	bActual, err := b.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(bActual, []Record{{"foo": 6}}) {
+		t.Fatalf("unexpected: %v", bActual)
+	}
+}
+
 func TestDatasetFilter(t *testing.T) {
 	input := &RecordIterator{
 		{"foo": 1},
