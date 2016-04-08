@@ -123,6 +123,73 @@ func TestDatasetReduce(t *testing.T) {
 	}
 }
 
+func TestDatasetReduceByKey(t *testing.T) {
+	input := &RecordIterator{
+		{"foo": 1, "bar": 1},
+		{"foo": 2, "bar": 1},
+		{"foo": 2, "bar": 1},
+	}
+	expected := []Record{
+		{"foo": 1, "bar": 1},
+		{"foo": 2, "bar": 2},
+	}
+
+	actual, err := NewDataset(input).ReduceByKey("foo", func(a, b Record) Record {
+		return a.Set("bar", a.Int("bar")+b.Int("bar"))
+	}).SortInt("foo").Collect()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("expected: %v\nactual: %v", expected, actual)
+	}
+}
+
+func TestSortInt(t *testing.T) {
+	input := &RecordIterator{
+		{"foo": 3},
+		{"foo": 1},
+		{"foo": 2},
+	}
+	expected := []Record{
+		{"foo": 1},
+		{"foo": 2},
+		{"foo": 3},
+	}
+
+	actual, err := NewDataset(input).SortInt("foo").Collect()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("expected: %v\nactual: %v", expected, actual)
+	}
+}
+
+func TestSortString(t *testing.T) {
+	input := &RecordIterator{
+		{"foo": "3"},
+		{"foo": "1"},
+		{"foo": "2"},
+	}
+	expected := []Record{
+		{"foo": "1"},
+		{"foo": "2"},
+		{"foo": "3"},
+	}
+
+	actual, err := NewDataset(input).SortString("foo").Collect()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("expected: %v\nactual: %v", expected, actual)
+	}
+}
+
 func TestDatasetErrorPropagation(t *testing.T) {
 	input := new(FailingIterator)
 
@@ -132,7 +199,9 @@ func TestDatasetErrorPropagation(t *testing.T) {
 		return r
 	}).Reduce(func(a, b Record) Record {
 		return a
-	}).Collect()
+	}).ReduceByKey("foo", func(a, b Record) Record {
+		return a
+	}).SortInt("foo").SortString("bar").Collect()
 
 	if err == nil {
 		t.Fatalf("unexpected nil error, actual: %v", actual)
