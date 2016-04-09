@@ -146,7 +146,7 @@ func TestDatasetReduceByKey(t *testing.T) {
 	}
 }
 
-func TestSortInt(t *testing.T) {
+func TestDatasetSortInt(t *testing.T) {
 	input := &RecordIterator{
 		{"foo": 3},
 		{"foo": 1},
@@ -168,7 +168,7 @@ func TestSortInt(t *testing.T) {
 	}
 }
 
-func TestSortString(t *testing.T) {
+func TestDatasetSortString(t *testing.T) {
 	input := &RecordIterator{
 		{"foo": "3"},
 		{"foo": "1"},
@@ -190,6 +190,31 @@ func TestSortString(t *testing.T) {
 	}
 }
 
+func TestDatasetUnion(t *testing.T) {
+	input := &RecordIterator{
+		{"foo": 1},
+		{"foo": 2},
+		{"foo": 3},
+	}
+	expected := []Record{
+		{"foo": 1},
+		{"foo": 2},
+		{"foo": 3},
+		{"foo": 1},
+		{"foo": 2},
+		{"foo": 3},
+	}
+
+	actual, err := NewDataset(input).Union(input).Collect()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("expected: %v\nactual: %v", expected, actual)
+	}
+}
+
 func TestDatasetErrorPropagation(t *testing.T) {
 	input := new(FailingIterator)
 
@@ -201,7 +226,7 @@ func TestDatasetErrorPropagation(t *testing.T) {
 		return a
 	}).ReduceByKey("foo", func(a, b Record) Record {
 		return a
-	}).SortInt("foo").SortString("bar").Collect()
+	}).Union(input).SortInt("foo").SortString("bar").Collect()
 
 	if err == nil {
 		t.Fatalf("unexpected nil error, actual: %v", actual)

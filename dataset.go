@@ -145,7 +145,7 @@ func (d *Dataset) ReduceByKey(key string, fn func(a, b Record) Record) *Dataset 
 	}
 }
 
-func (d *Dataset) SortInt(key string) *Dataset {
+func (d *Dataset) Sort(fn func([]Record) sort.Interface) *Dataset {
 	var recs []Record
 	done := false
 
@@ -158,7 +158,7 @@ func (d *Dataset) SortInt(key string) *Dataset {
 					return nil, err
 				}
 
-				sort.Sort(intSorter{records: recs, key: key})
+				sort.Sort(fn(recs))
 				done = true
 			}
 
@@ -173,29 +173,40 @@ func (d *Dataset) SortInt(key string) *Dataset {
 	}
 }
 
+func (d *Dataset) SortInt(key string) *Dataset {
+	return d.Sort(func(recs []Record) sort.Interface {
+		return intSorter{records: recs, key: key}
+	})
+}
+
 func (d *Dataset) SortString(key string) *Dataset {
-	var recs []Record
-	done := false
+	return d.Sort(func(recs []Record) sort.Interface {
+		return stringSorter{records: recs, key: key}
+	})
+}
+
+func (d *Dataset) Union(other Iterator) *Dataset {
+	doneFirst := false
 
 	return &Dataset{
 		Input: d.Clone(),
 		Transform: func(iterator Iterator) (Record, error) {
-			if !done {
-				var err error
-				if recs, err = NewDataset(iterator).Collect(); err != nil {
+			if !doneFirst {
+				next, err := iterator.Next()
+				if err != nil {
 					return nil, err
+				} else if next != nil {
+					return next, nil
 				}
-
-				sort.Sort(stringSorter{records: recs, key: key})
-				done = true
 			}
 
-			if len(recs) == 0 {
+			next, err := other.Next()
+			if err != nil {
+				return nil, err
+			} else if next == nil {
 				return nil, nil
 			}
 
-			next := recs[0]
-			recs = recs[1:]
 			return next, nil
 		},
 	}
