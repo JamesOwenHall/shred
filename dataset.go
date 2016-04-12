@@ -212,6 +212,46 @@ func (d *Dataset) Union(other Iterator) *Dataset {
 	}
 }
 
+func (d *Dataset) InnerJoin(lKey, rKey string, right Iterator) *Dataset {
+	var (
+		rightMap     map[interface{}][]Record
+		currentLeft  Record
+		currentRight []Record
+	)
+
+	return &Dataset{
+		Input: d.Clone(),
+		Transform: func(iterator Iterator) (Record, error) {
+			if rightMap == nil {
+				rightMap = make(map[interface{}][]Record)
+				if _, err := NewDataset(right).Filter(func(r Record) bool {
+					val := r.Get(rKey)
+					rightMap[val] = append(rightMap[val], r)
+					return false
+				}).Collect(); err != nil {
+					return nil, err
+				}
+			}
+
+			for len(currentRight) == 0 {
+				next, err := iterator.Next()
+				if err != nil {
+					return nil, err
+				} else if next == nil {
+					return nil, nil
+				}
+
+				currentLeft = next
+				currentRight = rightMap[currentLeft.Get(lKey)]
+			}
+
+			next := currentLeft.Merge(currentRight[0])
+			currentRight = currentRight[1:]
+			return next, nil
+		},
+	}
+}
+
 type intSorter struct {
 	records []Record
 	key     string

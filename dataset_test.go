@@ -215,6 +215,37 @@ func TestDatasetUnion(t *testing.T) {
 	}
 }
 
+func TestDatasetInnerJoin(t *testing.T) {
+	left := &RecordIterator{
+		{"foo": 1, "bar": 1},
+		{"foo": 2, "bar": 1},
+		{"foo": 3, "bar": 2},
+		{"foo": 4, "bar": 3},
+	}
+	right := &RecordIterator{
+		{"jib": 1, "baz": 1},
+		{"jib": 2, "baz": 1},
+		{"jib": 3, "baz": 2},
+		{"jib": 4, "baz": 4},
+	}
+	expected := []Record{
+		{"foo": 1, "bar": 1, "baz": 1, "jib": 1},
+		{"foo": 1, "bar": 1, "baz": 1, "jib": 2},
+		{"foo": 2, "bar": 1, "baz": 1, "jib": 1},
+		{"foo": 2, "bar": 1, "baz": 1, "jib": 2},
+		{"foo": 3, "bar": 2, "baz": 2, "jib": 3},
+	}
+
+	actual, err := NewDataset(left).InnerJoin("bar", "baz", right).Collect()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("expected: %v\nactual: %v", expected, actual)
+	}
+}
+
 func TestDatasetErrorPropagation(t *testing.T) {
 	input := new(FailingIterator)
 
