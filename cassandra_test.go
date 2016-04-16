@@ -13,10 +13,8 @@ func CassandraSession(t *testing.T) *gocql.Session {
 	cluster.Consistency = gocql.One
 	cluster.ProtoVersion = 4
 	session, err := cluster.CreateSession()
-	if err == gocql.ErrNoConnectionsStarted {
+	if err != nil {
 		t.Skip("unable to connect to Cassandra")
-	} else if err != nil {
-		t.Fatal(err)
 	}
 
 	return session
