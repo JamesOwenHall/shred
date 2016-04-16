@@ -5,29 +5,36 @@ import (
 )
 
 type Dataset struct {
-	Input     Iterator
-	Transform func(Iterator) (Record, error)
+	input     Iterator
+	transform func(Iterator) (Record, error)
 }
 
 func NewDataset(input Iterator) *Dataset {
 	return &Dataset{
-		Input: input,
+		input: input,
+	}
+}
+
+func (d *Dataset) Transform(fn func(Iterator) (Record, error)) *Dataset {
+	return &Dataset{
+		input:     d.Clone(),
+		transform: fn,
 	}
 }
 
 func (d *Dataset) Clone() Iterator {
 	return &Dataset{
-		Input:     d.Input.Clone(),
-		Transform: d.Transform,
+		input:     d.input.Clone(),
+		transform: d.transform,
 	}
 }
 
 func (d *Dataset) Next() (Record, error) {
-	if d.Transform == nil {
-		return d.Input.Next()
+	if d.transform == nil {
+		return d.input.Next()
 	}
 
-	return d.Transform(d.Input)
+	return d.transform(d.input)
 }
 
 func (d *Dataset) Collect() ([]Record, error) {
@@ -46,131 +53,116 @@ func (d *Dataset) Collect() ([]Record, error) {
 }
 
 func (d *Dataset) Filter(fn func(Record) bool) *Dataset {
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			for {
-				next, err := iterator.Next()
-				if err != nil {
-					return nil, err
-				} else if next == nil {
-					return nil, nil
-				} else if fn(next) {
-					return next, nil
-				}
-			}
-		},
-	}
-}
-
-func (d *Dataset) Map(fn func(Record) Record) *Dataset {
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		for {
 			next, err := iterator.Next()
 			if err != nil {
 				return nil, err
 			} else if next == nil {
 				return nil, nil
+			} else if fn(next) {
+				return next, nil
 			}
+		}
+	})
+}
 
-			return fn(next), nil
-		},
-	}
+func (d *Dataset) Map(fn func(Record) Record) *Dataset {
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		next, err := iterator.Next()
+		if err != nil {
+			return nil, err
+		} else if next == nil {
+			return nil, nil
+		}
+
+		return fn(next), nil
+	})
 }
 
 func (d *Dataset) Reduce(fn func(a, b Record) Record) *Dataset {
 	var acc Record
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			for {
-				next, err := iterator.Next()
-				if err != nil {
-					return nil, err
-				} else if next == nil {
-					result := acc
-					acc = nil
-					return result, nil
-				} else if acc == nil {
-					acc = next
-					continue
-				}
-
-				acc = fn(acc, next)
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		for {
+			next, err := iterator.Next()
+			if err != nil {
+				return nil, err
+			} else if next == nil {
+				result := acc
+				acc = nil
+				return result, nil
+			} else if acc == nil {
+				acc = next
+				continue
 			}
-		},
-	}
+
+			acc = fn(acc, next)
+		}
+	})
 }
 
 func (d *Dataset) ReduceByKey(key string, fn func(a, b Record) Record) *Dataset {
 	var acc []Record
 	done := false
 
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			if !done {
-				keyed := map[interface{}]Record{}
-				for {
-					next, err := iterator.Next()
-					if err != nil {
-						return nil, err
-					} else if next == nil {
-						break
-					}
-
-					reduceVal := next.Get(key)
-					if a, exists := keyed[reduceVal]; !exists {
-						keyed[reduceVal] = next
-					} else {
-						keyed[reduceVal] = fn(a, next)
-					}
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		if !done {
+			keyed := map[interface{}]Record{}
+			for {
+				next, err := iterator.Next()
+				if err != nil {
+					return nil, err
+				} else if next == nil {
+					break
 				}
 
-				for _, rec := range keyed {
-					acc = append(acc, rec)
+				reduceVal := next.Get(key)
+				if a, exists := keyed[reduceVal]; !exists {
+					keyed[reduceVal] = next
+				} else {
+					keyed[reduceVal] = fn(a, next)
 				}
-				done = true
 			}
 
-			if len(acc) == 0 {
-				return nil, nil
+			for _, rec := range keyed {
+				acc = append(acc, rec)
 			}
+			done = true
+		}
 
-			next := acc[0]
-			acc = acc[1:]
-			return next, nil
-		},
-	}
+		if len(acc) == 0 {
+			return nil, nil
+		}
+
+		next := acc[0]
+		acc = acc[1:]
+		return next, nil
+	})
 }
 
 func (d *Dataset) Sort(fn func([]Record) sort.Interface) *Dataset {
 	var recs []Record
 	done := false
 
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			if !done {
-				var err error
-				if recs, err = NewDataset(iterator).Collect(); err != nil {
-					return nil, err
-				}
-
-				sort.Sort(fn(recs))
-				done = true
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		if !done {
+			var err error
+			if recs, err = NewDataset(iterator).Collect(); err != nil {
+				return nil, err
 			}
 
-			if len(recs) == 0 {
-				return nil, nil
-			}
+			sort.Sort(fn(recs))
+			done = true
+		}
 
-			next := recs[0]
-			recs = recs[1:]
-			return next, nil
-		},
-	}
+		if len(recs) == 0 {
+			return nil, nil
+		}
+
+		next := recs[0]
+		recs = recs[1:]
+		return next, nil
+	})
 }
 
 func (d *Dataset) SortInt(key string) *Dataset {
@@ -188,28 +180,25 @@ func (d *Dataset) SortString(key string) *Dataset {
 func (d *Dataset) Union(other Iterator) *Dataset {
 	doneFirst := false
 
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			if !doneFirst {
-				next, err := iterator.Next()
-				if err != nil {
-					return nil, err
-				} else if next != nil {
-					return next, nil
-				}
-			}
-
-			next, err := other.Next()
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		if !doneFirst {
+			next, err := iterator.Next()
 			if err != nil {
 				return nil, err
-			} else if next == nil {
-				return nil, nil
+			} else if next != nil {
+				return next, nil
 			}
+		}
 
-			return next, nil
-		},
-	}
+		next, err := other.Next()
+		if err != nil {
+			return nil, err
+		} else if next == nil {
+			return nil, nil
+		}
+
+		return next, nil
+	})
 }
 
 func (d *Dataset) InnerJoin(lKey, rKey string, right Iterator) *Dataset {
@@ -219,37 +208,34 @@ func (d *Dataset) InnerJoin(lKey, rKey string, right Iterator) *Dataset {
 		currentRight []Record
 	)
 
-	return &Dataset{
-		Input: d.Clone(),
-		Transform: func(iterator Iterator) (Record, error) {
-			if rightMap == nil {
-				rightMap = make(map[interface{}][]Record)
-				if _, err := NewDataset(right).Filter(func(r Record) bool {
-					val := r.Get(rKey)
-					rightMap[val] = append(rightMap[val], r)
-					return false
-				}).Collect(); err != nil {
-					return nil, err
-				}
+	return d.Transform(func(iterator Iterator) (Record, error) {
+		if rightMap == nil {
+			rightMap = make(map[interface{}][]Record)
+			if _, err := NewDataset(right).Filter(func(r Record) bool {
+				val := r.Get(rKey)
+				rightMap[val] = append(rightMap[val], r)
+				return false
+			}).Collect(); err != nil {
+				return nil, err
+			}
+		}
+
+		for len(currentRight) == 0 {
+			next, err := iterator.Next()
+			if err != nil {
+				return nil, err
+			} else if next == nil {
+				return nil, nil
 			}
 
-			for len(currentRight) == 0 {
-				next, err := iterator.Next()
-				if err != nil {
-					return nil, err
-				} else if next == nil {
-					return nil, nil
-				}
+			currentLeft = next
+			currentRight = rightMap[currentLeft.Get(lKey)]
+		}
 
-				currentLeft = next
-				currentRight = rightMap[currentLeft.Get(lKey)]
-			}
-
-			next := currentLeft.Merge(currentRight[0])
-			currentRight = currentRight[1:]
-			return next, nil
-		},
-	}
+		next := currentLeft.Merge(currentRight[0])
+		currentRight = currentRight[1:]
+		return next, nil
+	})
 }
 
 type intSorter struct {
