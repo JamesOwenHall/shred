@@ -1,6 +1,7 @@
 package shred
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -8,7 +9,9 @@ import (
 )
 
 func CassandraSession(t *testing.T) *gocql.Session {
-	cluster := gocql.NewCluster("127.0.0.1")
+	host := os.Getenv("CASSANDRA_HOST")
+
+	cluster := gocql.NewCluster(host)
 	cluster.Keyspace = "shred_test"
 	cluster.Consistency = gocql.One
 	cluster.ProtoVersion = 4
