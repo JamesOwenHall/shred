@@ -50,7 +50,7 @@ func TestRecordAccess(t *testing.T) {
 	if actual := rec.StringOr("string", "bar"); actual != "foo" {
 		t.Fatalf("unexpected: %v", actual)
 	}
-	if actual := rec.String("int"); actual != "" {
+	if actual := rec.String("int"); actual != "5" {
 		t.Fatalf("unexpected: %v", actual)
 	}
 	if actual := rec.StringOr("int", "bar"); actual != "bar" {

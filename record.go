@@ -1,5 +1,9 @@
 package shred
 
+import (
+	"strconv"
+)
+
 type Record map[string]interface{}
 
 func (r Record) Get(key string) interface{} {
@@ -16,8 +20,16 @@ func (r Record) GetOr(key string, or interface{}) interface{} {
 }
 
 func (r Record) Int(key string) int {
-	i, _ := r.Get(key).(int)
-	return i
+	v := r.Get(key)
+	switch v := v.(type) {
+	case int:
+		return v
+	case string:
+		i, _ := strconv.Atoi(v)
+		return i
+	default:
+		return 0
+	}
 }
 
 func (r Record) IntOr(key string, or int) int {
@@ -29,8 +41,15 @@ func (r Record) IntOr(key string, or int) int {
 }
 
 func (r Record) String(key string) string {
-	s, _ := r.Get(key).(string)
-	return s
+	v := r.Get(key)
+	switch v := v.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	default:
+		return ""
+	}
 }
 
 func (r Record) StringOr(key string, or string) string {

@@ -38,7 +38,7 @@ func TestSqlIterator(t *testing.T) {
 
 	actual, err := NewDataset(users).
 		InnerJoin("user_id", "user_id", orders).
-		SortString("total_price").
+		SortInt("total_price").
 		Collect()
 
 	if err != nil {
